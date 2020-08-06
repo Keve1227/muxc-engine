@@ -4,11 +4,11 @@ const { JSDOM } = require("jsdom");
 
 function loadComponents() {
     let componentsDir = "./structure/components";
-    let componentDirs = fs.readdirSync(componentsDir);
-    let objToReturn = [];
+    let componentNames = fs.readdirSync(componentsDir);
+    let components = {};
 
-    componentDirs.forEach(dir => {
-        let componentDir = path.join(componentsDir, dir);
+    componentNames.forEach(name => {
+        let componentDir = path.join(componentsDir, name);
 
         let config = null;
         let configPath = path.join(componentDir, "config.json");
@@ -17,13 +17,16 @@ function loadComponents() {
 
         let componentHTML = fs.readFileSync(path.join(componentDir, "index.html")).toString();
 
-        objToReturn[dir] = {
-            config: config, 
-            element: new JSDOM(componentHTML).window.document.body.firstChild
+        components[name] = {
+            config: config,
+            html: componentHTML,
+            get element() {
+                return new JSDOM(componentHTML).window.document.body.firstChild;
+            }
         };
     });
 
-    return objToReturn;
+    return components;
 }
 
 module.exports = loadComponents();
