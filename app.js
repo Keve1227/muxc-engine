@@ -6,39 +6,34 @@ console.log(HTML.outerHTML);
 require("fs").writeFileSync("./final.html", HTML.outerHTML);
 
 function parse(node) {
-    
     if (node.tagName.toLowerCase() == "component") {
-        
-        if (!node.hasAttribute("ref"))
+        if (!node.hasAttribute("ref")) {
             throw new Error(`Component tag missing ref attribute: ${node.outerHTML}`);
-            
-        let compName = node.getAttribute("ref").toLowerCase();
-        let component = components[compName];
-            
-        if (!component)
-            throw new Error(`Component ${compName} does not exist!`);
-        
-        let groupedAttributes = groupAttributes(node);
-        
-        let componentElement = component.element;
-
-        if (groupedAttributes.arguments) {
-            let componentHTML = component.element.outerHTML;
-            Object.keys(groupedAttributes.arguments).forEach(argName => {
-                componentHTML = componentHTML.split(`{{${argName}}}`).join(groupedAttributes.arguments[argName]);
-            });
-            componentElement = new JSDOM(componentHTML).window.document.body.firstChild;
-            node.replaceWith(componentElement);
-            
-            parse(componentElement);
         }
-    } 
-    else {
-        Array.from(node.children).forEach(child => {
-            parse(child);
-        });
-        return node;
-    }   
+
+        let componentName = node.getAttribute("ref").toLowerCase();
+        let component = components[componentName];
+
+        if (!component) {
+            throw new Error(`Component ${componentName} does not exist!`);
+        }
+
+        let groupedAttributes = groupAttributes(node);
+
+        let newHTML = component.html;
+        for (let argName in groupedAttributes.arguments) {
+            newHTML = newHTML.split(`{{${argName}}}`).join(groupedAttributes.arguments[argName]);
+        }
+        node = new JSDOM(newHTML).window.document.body.firstChild;
+    } else {
+        node = node.cloneNode(true);
+    }
+
+    Array.from(node.children).forEach(child => {
+        child.replaceWith(parse(child));
+    });
+
+    return node;
 }
 
 // Group element attributes into normal attributes and argument attributes
