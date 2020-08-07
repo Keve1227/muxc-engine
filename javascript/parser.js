@@ -17,6 +17,7 @@ function parse(node) {
         let groupedAttributes = groupAttributes(node);
 
         let newHTML = component.html;
+        newHTML = newHTML.split("$childs").join(node.innerHTML);
         for (let argName in groupedAttributes.arguments) {
             newHTML = newHTML.split(`{{${argName}}}`).join(groupedAttributes.arguments[argName]);
         }
