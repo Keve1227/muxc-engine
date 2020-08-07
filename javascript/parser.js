@@ -1,28 +1,27 @@
 const components = require("./components");
 const { JSDOM } = require("jsdom");
 
-function parse(node, recursionChain) {
-    if (recursionChain == null) {
-        recursionChain = new Set();
-    }
+function parse(node, depthLimit = 128, stack = []) {
+    let stackSizeBefore = stack.length;
 
-    let recursionChainBefore = new Set(recursionChain);
     if (node.tagName.toLowerCase() == "component") {
-        node = dereferenceComponent(node, recursionChain);
+        node = dereferenceComponent(node, depthLimit, stack);
     } else {
+        stack.push(node.tagName.toLowerCase());
+        assertStackSizeLimitNotExceeded(stack, depthLimit);
+
         node = node.cloneNode(true);
     }
 
     Array.from(node.children).forEach(child => {
-        child.replaceWith(parse(child, recursionChain));
+        child.replaceWith(parse(child, depthLimit, stack));
     });
 
-    recursionChain.clear();
-    recursionChainBefore.forEach(e => recursionChain.add(e));
+    stack.splice(stackSizeBefore, stack.length - stackSizeBefore);
     return node;
 }
 
-function dereferenceComponent(node, recursionChain) {
+function dereferenceComponent(node, depthLimit, stack) {
     if (!node.hasAttribute("ref")) {
         throw new Error(`Component tag missing ref attribute: ${node.outerHTML}`);
     }
@@ -34,20 +33,8 @@ function dereferenceComponent(node, recursionChain) {
         throw new Error(`Component ${componentName} does not exist!`);
     }
 
-    // Check for recursion
-    if (recursionChain.has(componentName)) {
-        let recursionChainStr = [...Array.from(recursionChain.keys()), componentName].map(e => {
-            if (typeof e == "symbol") {
-                return e.description;
-            } else {
-                return "comp:" + e + (e == componentName ? " <--" : "");
-            }
-        }).join("\n\t");
-
-        throw new Error(`Recursion detected! Stack:\n\t${recursionChainStr}`);
-    } else {
-        recursionChain.add(componentName);
-    }
+    stack.push(`COMP:${componentName}`);
+    assertStackSizeLimitNotExceeded(stack, depthLimit);
 
     let groupedAttributes = groupAttributes(node);
 
@@ -65,7 +52,7 @@ function dereferenceComponent(node, recursionChain) {
 
     // If the resulting element is a component in itself, parse it as well
     if (node.tagName.toLowerCase() == "component") {
-        node = dereferenceComponent(node, recursionChain);
+        node = dereferenceComponent(node, depthLimit, stack);
     }
 
     return node;
@@ -95,6 +82,13 @@ function groupAttributes(element) {
     });
 
     return attributes;
+}
+
+function assertStackSizeLimitNotExceeded(stack, sizeLimit) {
+    if (stack.length > sizeLimit) {
+        let stackStr = (stack.length > 20 ? "...\n\t" : "") + stack.slice(stack.length - 20, stack.length).join("\n\t");
+        throw new Error(`Depth limit exceeded!\n\t${stackStr}`);
+    }
 }
 
 module.exports = parse;
