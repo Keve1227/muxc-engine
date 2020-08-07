@@ -21,7 +21,7 @@ function loadComponents() {
             config: config,
             html: componentHTML,
             get element() {
-                return new JSDOM(componentHTML).window.document.body.firstChild;
+                return new JSDOM(componentHTML).window.document.firstElementChild;
             }
         };
     });
