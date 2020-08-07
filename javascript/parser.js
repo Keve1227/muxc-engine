@@ -21,6 +21,11 @@ function parse(node) {
             newHTML = newHTML.split(`{{${argName}}}`).join(groupedAttributes.arguments[argName]);
         }
         node = new JSDOM(newHTML).window.document.body.firstChild;
+
+        // Apply non-arg attributes
+        for (let argName in groupedAttributes.standard) {
+            node.setAttribute(argName, groupedAttributes.standard[argName]);
+        }
     } else {
         node = node.cloneNode(true);
     }
