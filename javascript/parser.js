@@ -39,10 +39,19 @@ function dereferenceComponent(node, depthLimit, stack) {
     let groupedAttributes = groupAttributes(node);
 
     let newHTML = component.html;
+    let args = groupedAttributes.arguments;
+
+    // Check required parameters/arguments
+    let required = component.config.required_params;
+    if (Array.isArray(required) && !required.every(val => args[val]))
+        throw new Error(`Component ${componentName} requires arguments: ${required}`);
+
+    // Apply argument values
     newHTML = newHTML.split("$childs").join(node.innerHTML);
-    for (let argName in groupedAttributes.arguments) {
-        newHTML = newHTML.split(`{{${argName}}}`).join(groupedAttributes.arguments[argName]);
+    for (let argName in args) {
+        newHTML = newHTML.split(`{{${argName}}}`).join(args[argName]);
     }
+
     node = new JSDOM(newHTML).window.document.body.firstChild;
 
     // Apply non-arg attributes
