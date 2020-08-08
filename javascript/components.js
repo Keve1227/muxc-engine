@@ -10,7 +10,7 @@ function loadComponents() {
     componentNames.forEach(name => {
         let componentDir = path.join(componentsDir, name);
 
-        let config = null;
+        let config = {};
         let configPath = path.join(componentDir, "config.json");
         if (fs.existsSync(configPath))
             config = JSON.parse(fs.readFileSync(path.join(componentDir, "config.json")));
