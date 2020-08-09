@@ -1,33 +1,34 @@
 const components = require("./components");
 const { JSDOM } = require("jsdom");
 
-function parse(node, depthLimit = 128, stack = []) {
+function parse(elem, depthLimit = 128, stack = []) {
     let stackSizeBefore = stack.length;
 
-    if (node.tagName.toLowerCase() == "component") {
-        node = dereferenceComponent(node, depthLimit, stack);
+    if (elem.tagName.toLowerCase() == "component") {
+        elem = dereferenceComponent(elem, depthLimit, stack);
     } else {
-        stack.push(node.tagName.toLowerCase());
+        stack.push(elem.tagName.toLowerCase());
         assertStackSizeLimitNotExceeded(stack, depthLimit);
 
-        node = node.cloneNode(true);
+        elem = elem.cloneNode(true);
     }
 
-    Array.from(node.children).forEach(child => {
+    Array.from(elem.children).forEach(child => {
         child.replaceWith(parse(child, depthLimit, stack));
     });
 
     stack.splice(stackSizeBefore, stack.length - stackSizeBefore);
-    return node;
+    return elem;
 }
 
-function dereferenceComponent(node, depthLimit, stack) {
-    if (!node.hasAttribute("ref")) {
-        throw new Error(`Component tag missing ref attribute: ${node.outerHTML}`);
+function dereferenceComponent(elem, depthLimit, stack) {
+    if (!elem.hasAttribute("ref")) {
+        throw new Error(`Component tag missing ref attribute: ${elem.outerHTML}`);
     }
 
-    let componentName = node.getAttribute("ref").toLowerCase();
+    let componentName = elem.getAttribute("ref").toLowerCase();
     let component = components[componentName];
+    let replacerDefaults = component.config.default_values || {};
 
     if (!component) {
         throw new Error(`Component ${componentName} does not exist!`);
@@ -36,61 +37,48 @@ function dereferenceComponent(node, depthLimit, stack) {
     stack.push(`COMP:${componentName}`);
     assertStackSizeLimitNotExceeded(stack, depthLimit);
 
-    let groupedAttributes = groupAttributes(node);
+    let attributes = elem.attributes;
 
-    let newHTML = component.html;
-    let args = groupedAttributes.arguments;
+    newHTML = component.html
+        // Insert childs from the component-tag
+        .replace(/\$childs/gi, elem.innerHTML)
+        // Apply replacer brackets
+        .replace(/\{\{([^\p{C}\p{Z}"'>/={}]+)\}\}/gu, (_, replacer) => {
+            let attribute = attributes[`@${replacer}`] ||
+                attributes[replacer];
 
-    // Check required parameters/arguments
-    let required = component.config.required_params;
-    if (Array.isArray(required) && !required.every(val => args[val]))
-        throw new Error(`Component ${componentName} requires arguments: ${required}`);
+            if (attribute && attribute.value) {
+                return attribute.value;
+            } else if (replacerDefaults[replacer] != null) {
+                if (typeof replacerDefaults[replacer] != "string")
+                    return JSON.stringify(replacerDefaults[replacer]);
 
-    // Apply argument values
-    newHTML = newHTML.split("$childs").join(node.innerHTML);
-    for (let argName in args) {
-        newHTML = newHTML.split(`{{${argName}}}`).join(args[argName]);
-    }
+                return replacerDefaults[replacer];
+            } else {
+                return "";
+            }
+        });
+    elem = new JSDOM(newHTML).window.document.body.firstChild;
 
-    node = new JSDOM(newHTML).window.document.body.firstChild;
+    // Pass down non-argument attributes from the component-tag
+    for (let attr of attributes) {
+        // Filter out argument attributes
+        if (attr.name[0] == "@") continue;
 
-    // Apply non-arg attributes
-    for (let argName in groupedAttributes.standard) {
-        node.setAttribute(argName, groupedAttributes.standard[argName]);
-    }
-
-    // If the resulting element is a component in itself, parse it as well
-    if (node.tagName.toLowerCase() == "component") {
-        node = dereferenceComponent(node, depthLimit, stack);
-    }
-
-    return node;
-}
-
-// Group element attributes into normal attributes and argument attributes
-function groupAttributes(element) {
-    let attributes = {
-        standard: {},
-        arguments: {}
-    };
-
-    Array.from(element.attributes).forEach(attr => {
-
-        if (attr.name.startsWith("@")) {
-
-            let argName = attr.name.slice(1);
-            attributes.arguments[argName] = attr.value;
-
+        if (attr.name.toLowerCase() == "ref") {
+            // Add the component's name as a class: class="whatever... __component_name__"
+            elem.classList.add(`__${attr.value}__`);
         } else {
-
-            if (attr.name == "ref")
-                return;
-
-            attributes.standard[attr.name] = attr.value;
+            elem.setAttribute(attr.name, attr.value);
         }
-    });
+    }
 
-    return attributes;
+    // If the resulting element is a component, dereference it as well
+    if (elem.tagName.toLowerCase() == "component") {
+        elem = dereferenceComponent(elem, depthLimit, stack);
+    }
+
+    return elem;
 }
 
 function assertStackSizeLimitNotExceeded(stack, sizeLimit) {
