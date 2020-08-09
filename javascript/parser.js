@@ -28,6 +28,7 @@ function dereferenceComponent(node, depthLimit, stack) {
 
     let componentName = node.getAttribute("ref").toLowerCase();
     let component = components[componentName];
+    let replacerDefaults = component.config.default_values || {};
 
     if (!component) {
         throw new Error(`Component ${componentName} does not exist!`);
@@ -36,27 +37,38 @@ function dereferenceComponent(node, depthLimit, stack) {
     stack.push(`COMP:${componentName}`);
     assertStackSizeLimitNotExceeded(stack, depthLimit);
 
-    let groupedAttributes = groupAttributes(node);
+    let attributes = node.attributes;
 
-    let newHTML = component.html;
-    let args = groupedAttributes.arguments;
+    newHTML = component.html
+        // Insert childs
+        .replace(/\$childs/gi, node.innerHTML)
+        // Apply replacer brackets
+        .replace(/\{\{([^\p{C}\p{Z}"'>/={}]+)\}\}/gu, (_, replacer) => {
+            let attribute = attributes[`@${replacer}`] ||
+                attributes[replacer];
 
-    // Check required parameters/arguments
-    let required = component.config.required_params;
-    if (Array.isArray(required) && !required.every(val => args[val]))
-        throw new Error(`Component ${componentName} requires arguments: ${required}`);
+            if (attribute && attribute.value) {
+                return attribute.value;
+            } else if (replacerDefaults[replacer] != null) {
+                if (typeof replacerDefaults[replacer] != "string")
+                    return JSON.stringify(replacerDefaults[replacer]);
 
-    // Apply argument values
-    newHTML = newHTML.split("$childs").join(node.innerHTML);
-    for (let argName in args) {
-        newHTML = newHTML.split(`{{${argName}}}`).join(args[argName]);
-    }
-
+                return replacerDefaults[replacer];
+            } else {
+                return "";
+            }
+        });
     node = new JSDOM(newHTML).window.document.body.firstChild;
 
-    // Apply non-arg attributes
-    for (let argName in groupedAttributes.standard) {
-        node.setAttribute(argName, groupedAttributes.standard[argName]);
+    // Apply non-argument attributes from component-tag
+    for (let attr of attributes) {
+        if (attr.name[0] == "@") continue;
+
+        if (attr.name.toLowerCase() == "ref") {
+            node.classList.add(`__${attr.value}__`);
+        } else {
+            node.setAttribute(attr.name, attr.value);
+        }
     }
 
     // If the resulting element is a component in itself, parse it as well
@@ -65,32 +77,6 @@ function dereferenceComponent(node, depthLimit, stack) {
     }
 
     return node;
-}
-
-// Group element attributes into normal attributes and argument attributes
-function groupAttributes(element) {
-    let attributes = {
-        standard: {},
-        arguments: {}
-    };
-
-    Array.from(element.attributes).forEach(attr => {
-
-        if (attr.name.startsWith("@")) {
-
-            let argName = attr.name.slice(1);
-            attributes.arguments[argName] = attr.value;
-
-        } else {
-
-            if (attr.name == "ref")
-                return;
-
-            attributes.standard[attr.name] = attr.value;
-        }
-    });
-
-    return attributes;
 }
 
 function assertStackSizeLimitNotExceeded(stack, sizeLimit) {
