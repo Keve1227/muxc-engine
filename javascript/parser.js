@@ -1,32 +1,32 @@
 const components = require("./components");
 const { JSDOM } = require("jsdom");
 
-function parse(node, depthLimit = 128, stack = []) {
+function parse(elem, depthLimit = 128, stack = []) {
     let stackSizeBefore = stack.length;
 
-    if (node.tagName.toLowerCase() == "component") {
-        node = dereferenceComponent(node, depthLimit, stack);
+    if (elem.tagName.toLowerCase() == "component") {
+        elem = dereferenceComponent(elem, depthLimit, stack);
     } else {
-        stack.push(node.tagName.toLowerCase());
+        stack.push(elem.tagName.toLowerCase());
         assertStackSizeLimitNotExceeded(stack, depthLimit);
 
-        node = node.cloneNode(true);
+        elem = elem.cloneNode(true);
     }
 
-    Array.from(node.children).forEach(child => {
+    Array.from(elem.children).forEach(child => {
         child.replaceWith(parse(child, depthLimit, stack));
     });
 
     stack.splice(stackSizeBefore, stack.length - stackSizeBefore);
-    return node;
+    return elem;
 }
 
-function dereferenceComponent(node, depthLimit, stack) {
-    if (!node.hasAttribute("ref")) {
-        throw new Error(`Component tag missing ref attribute: ${node.outerHTML}`);
+function dereferenceComponent(elem, depthLimit, stack) {
+    if (!elem.hasAttribute("ref")) {
+        throw new Error(`Component tag missing ref attribute: ${elem.outerHTML}`);
     }
 
-    let componentName = node.getAttribute("ref").toLowerCase();
+    let componentName = elem.getAttribute("ref").toLowerCase();
     let component = components[componentName];
     let replacerDefaults = component.config.default_values || {};
 
@@ -37,11 +37,11 @@ function dereferenceComponent(node, depthLimit, stack) {
     stack.push(`COMP:${componentName}`);
     assertStackSizeLimitNotExceeded(stack, depthLimit);
 
-    let attributes = node.attributes;
+    let attributes = elem.attributes;
 
     newHTML = component.html
-        // Insert childs
-        .replace(/\$childs/gi, node.innerHTML)
+        // Insert childs from the component-tag
+        .replace(/\$childs/gi, elem.innerHTML)
         // Apply replacer brackets
         .replace(/\{\{([^\p{C}\p{Z}"'>/={}]+)\}\}/gu, (_, replacer) => {
             let attribute = attributes[`@${replacer}`] ||
@@ -58,25 +58,27 @@ function dereferenceComponent(node, depthLimit, stack) {
                 return "";
             }
         });
-    node = new JSDOM(newHTML).window.document.body.firstChild;
+    elem = new JSDOM(newHTML).window.document.body.firstChild;
 
-    // Apply non-argument attributes from component-tag
+    // Pass down non-argument attributes from the component-tag
     for (let attr of attributes) {
+        // Filter out argument attributes
         if (attr.name[0] == "@") continue;
 
         if (attr.name.toLowerCase() == "ref") {
-            node.classList.add(`__${attr.value}__`);
+            // Add the component's name as a class: class="whatever... __component_name__"
+            elem.classList.add(`__${attr.value}__`);
         } else {
-            node.setAttribute(attr.name, attr.value);
+            elem.setAttribute(attr.name, attr.value);
         }
     }
 
-    // If the resulting element is a component in itself, parse it as well
-    if (node.tagName.toLowerCase() == "component") {
-        node = dereferenceComponent(node, depthLimit, stack);
+    // If the resulting element is a component, dereference it as well
+    if (elem.tagName.toLowerCase() == "component") {
+        elem = dereferenceComponent(elem, depthLimit, stack);
     }
 
-    return node;
+    return elem;
 }
 
 function assertStackSizeLimitNotExceeded(stack, sizeLimit) {
