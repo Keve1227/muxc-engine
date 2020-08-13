@@ -36,4 +36,6 @@ function loadComponents() {
     return components;
 }
 
-module.exports = loadComponents();
+module.exports = {
+    load: loadComponents
+};

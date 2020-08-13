@@ -1,6 +1,6 @@
 const parser = require("./javascript/parser");
 const components = require("./javascript/components");
 
-let HTML = parser(components["home"].element);
+let { html: HTML } = parser("home", components.load());
 console.log(HTML.outerHTML);
 require("fs").writeFileSync("./final.html", HTML.outerHTML);
