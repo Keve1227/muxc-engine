@@ -14,7 +14,7 @@ function loadComponents() {
         let config = {};
         let configPath = path.join(componentDir, "config.json");
         if (fs.existsSync(configPath))
-            config = JSON.parse(fs.readFileSync(path.join(componentDir, "config.json")));
+            config = JSON.parse(fs.readFileSync(configPath));
 
         let style;
         let stylePath = path.join(componentDir, "style.css");
