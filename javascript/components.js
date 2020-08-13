@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { JSDOM } = require("jsdom");
+const css = require("css");
 
 function loadComponents() {
     let componentsDir = "./structure/components";
@@ -15,11 +16,17 @@ function loadComponents() {
         if (fs.existsSync(configPath))
             config = JSON.parse(fs.readFileSync(path.join(componentDir, "config.json")));
 
+        let style;
+        let stylePath = path.join(componentDir, "style.css");
+        if (fs.existsSync(stylePath))
+            style = css.parse(fs.readFileSync(stylePath));
+
         let componentHTML = fs.readFileSync(path.join(componentDir, "index.html")).toString();
 
         components[name] = {
             config: config,
             html: componentHTML,
+            style,
             get element() {
                 return new JSDOM(componentHTML).window.document.firstElementChild;
             }
