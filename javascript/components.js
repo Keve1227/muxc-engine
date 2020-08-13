@@ -19,7 +19,7 @@ function loadComponents() {
         let style;
         let stylePath = path.join(componentDir, "style.css");
         if (fs.existsSync(stylePath))
-            style = css.parse(fs.readFileSync(stylePath));
+            style = css.parse(fs.readFileSync(stylePath, { encoding: "utf8" }));
 
         let componentHTML = fs.readFileSync(path.join(componentDir, "index.html")).toString();
 
